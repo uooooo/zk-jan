@@ -7,11 +7,35 @@
     <meta name="description" content="Lovable Generated Project" />
     <meta name="author" content="Lovable" />
     <meta property="og:image" content="/og-image.png" />
+    <script src="/socket.io/socket.io.js"></script>
   </head>
 
   <body>
     <div id="root"></div>
     <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
     <script type="module" src="/src/main.tsx"></script>
+
+    <h1>Rock Paper Scissors</h1>
+    <button onclick="makeChoice('rock')">Rock</button>
+    <button onclick="makeChoice('paper')">Paper</button>
+    <button onclick="makeChoice('scissors')">Scissors</button>
+
+    <h2>Opponent's Choice: <span id="opponent-choice">Waiting...</span></h2>
+    <h2>Round Results: <span id="round-results">Waiting...</span></h2>
+
+    <script>
+      const socket = io();
+
+      function makeChoice(choice) {
+        socket.emit('choice', choice);
+      }
+
+      socket.on('roundResults', (results) => {
+        const resultText = results.isTie
+          ? 'It\'s a tie!'
+          : `Winners: ${results.winners.join(', ')}`;
+        document.getElementById('round-results').textContent = resultText;
+      });
+    </script>
   </body>
 </html>
