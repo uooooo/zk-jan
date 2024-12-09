@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 import { 
-  HandRock, 
-  HandPaper, 
-  HandScissors 
+  CircleDot, 
+  Circle, 
+  Scissors 
 } from "lucide-react";
 
 type Choice = "rock" | "paper" | "scissors";
@@ -15,9 +15,9 @@ interface GameChoiceProps {
 }
 
 const choiceIcons = {
-  rock: HandRock,
-  paper: HandPaper,
-  scissors: HandScissors,
+  rock: CircleDot,
+  paper: Circle,
+  scissors: Scissors,
 };
 
 const GameChoice = ({ choice, selected, onClick, disabled }: GameChoiceProps) => {
