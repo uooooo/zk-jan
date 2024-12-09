@@ -2,30 +2,36 @@ import { useState } from "react";
 import GameChoice from "./GameChoice";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
+import { Card, CardContent } from "./ui/card";
 
 type Choice = "rock" | "paper" | "scissors";
-type GameState = "choosing" | "waiting" | "result";
+type GameState = "setup" | "choosing" | "waiting" | "result" | "finished";
 
 interface Player {
   id: number;
   name: string;
   choice: Choice | null;
+  isEliminated: boolean;
 }
 
-interface GameResult {
-  winner: Player | null;
+interface RoundResult {
+  winners: Player[];
   players: Player[];
   isTie: boolean;
+  roundNumber: number;
 }
+
+const TOTAL_ROUNDS = 5;
 
 const GameBoard = () => {
   const [players, setPlayers] = useState<Player[]>([
-    { id: 1, name: "あなた", choice: null },
-    { id: 2, name: "プレイヤー2", choice: null },
-    { id: 3, name: "プレイヤー3", choice: null },
+    { id: 1, name: "You", choice: null, isEliminated: false },
+    { id: 2, name: "Player 2", choice: null, isEliminated: false },
+    { id: 3, name: "Player 3", choice: null, isEliminated: false },
   ]);
   const [gameState, setGameState] = useState<GameState>("choosing");
-  const [result, setResult] = useState<GameResult | null>(null);
+  const [currentRound, setCurrentRound] = useState(1);
+  const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
 
   const handleChoice = (choice: Choice) => {
     setPlayers(prev => 
@@ -35,22 +41,26 @@ const GameBoard = () => {
     );
   };
 
-  const determineWinner = (gamePlayers: Player[]): GameResult => {
-    // シミュレートされた対戦相手の選択を生成
+  const determineWinner = (gamePlayers: Player[]): RoundResult => {
+    const activePlayers = gamePlayers.filter(p => !p.isEliminated);
     const choices: Choice[] = ["rock", "paper", "scissors"];
-    const playersWithChoices = gamePlayers.map(player => 
+    
+    const playersWithChoices = activePlayers.map(player => 
       player.id === 1 
         ? player 
         : { ...player, choice: choices[Math.floor(Math.random() * choices.length)] }
     );
 
-    // 全員が同じ手を出した場合は引き分け
     const allSameChoice = playersWithChoices.every(p => p.choice === playersWithChoices[0].choice);
     if (allSameChoice) {
-      return { winner: null, players: playersWithChoices, isTie: true };
+      return { 
+        winners: playersWithChoices, 
+        players: playersWithChoices, 
+        isTie: true, 
+        roundNumber: currentRound 
+      };
     }
 
-    // 勝者を決定
     const winningCombos = {
       rock: "scissors",
       paper: "rock",
@@ -70,58 +80,88 @@ const GameBoard = () => {
     });
 
     const maxScore = Math.max(...playerScores.map(ps => ps.score));
-    const winners = playerScores.filter(ps => ps.score === maxScore);
+    const winners = playerScores
+      .filter(ps => ps.score === maxScore)
+      .map(ps => ps.player);
 
     return {
-      winner: winners.length === 1 ? winners[0].player : null,
+      winners,
       players: playersWithChoices,
       isTie: winners.length > 1,
+      roundNumber: currentRound
     };
   };
 
   const handleSubmit = () => {
     if (!players[0].choice) {
-      toast.error("手を選んでください！");
+      toast.error("Please select your move!");
       return;
     }
 
     setGameState("waiting");
     setTimeout(() => {
-      const gameResult = determineWinner(players);
-      setResult(gameResult);
-      setGameState("result");
-      
-      if (gameResult.isTie) {
-        toast("引き分けです！");
-      } else if (gameResult.winner) {
-        toast(`${gameResult.winner.name}の勝ちです！`);
+      const roundResult = determineWinner(players);
+      setRoundResults(prev => [...prev, roundResult]);
+
+      if (currentRound === TOTAL_ROUNDS || roundResult.winners.length === 1) {
+        setGameState("finished");
+      } else {
+        // Eliminate losing players
+        const winnerIds = roundResult.winners.map(w => w.id);
+        setPlayers(prev => 
+          prev.map(player => ({
+            ...player,
+            choice: null,
+            isEliminated: player.isEliminated || !winnerIds.includes(player.id)
+          }))
+        );
+        setCurrentRound(prev => prev + 1);
+        setGameState("choosing");
+      }
+
+      if (roundResult.isTie) {
+        toast("It's a tie!");
+      } else {
+        const winnerNames = roundResult.winners.map(w => w.name).join(", ");
+        toast(`${winnerNames} won round ${currentRound}!`);
       }
     }, 1500);
   };
 
   const playAgain = () => {
-    setPlayers(prev => prev.map(player => ({ ...player, choice: null })));
+    setPlayers(prev => prev.map(player => ({ 
+      ...player, 
+      choice: null, 
+      isEliminated: false 
+    })));
     setGameState("choosing");
-    setResult(null);
+    setCurrentRound(1);
+    setRoundResults([]);
   };
 
-  const getChoiceInJapanese = (choice: Choice | null): string => {
-    if (!choice) return "未選択";
-    const choices = {
-      rock: "グー",
-      paper: "パー",
-      scissors: "チョキ",
-    };
-    return choices[choice];
+  const getChoiceName = (choice: Choice | null): string => {
+    if (!choice) return "Not selected";
+    return {
+      rock: "Rock",
+      paper: "Paper",
+      scissors: "Scissors",
+    }[choice];
   };
+
+  const activePlayers = players.filter(p => !p.isEliminated);
 
   return (
     <div className="flex flex-col items-center gap-8 p-8">
-      <h2 className="text-3xl font-bold text-game-purple mb-8">
-        {gameState === "choosing" && "手を選んでください"}
-        {gameState === "waiting" && "相手の手を待っています..."}
-        {gameState === "result" && (result?.isTie ? "引き分け！" : `${result?.winner?.name}の勝ち！`)}
-      </h2>
+      <div className="text-center">
+        <h2 className="text-3xl font-bold text-game-purple mb-2">
+          Round {currentRound} of {TOTAL_ROUNDS}
+        </h2>
+        <p className="text-gray-600">
+          {gameState === "choosing" && "Choose your move"}
+          {gameState === "waiting" && "Waiting for other players..."}
+          {gameState === "finished" && "Game Over!"}
+        </p>
+      </div>
       
       <div className="flex gap-6 flex-wrap justify-center">
         {(["rock", "paper", "scissors"] as Choice[]).map((choice) => (
@@ -130,41 +170,66 @@ const GameBoard = () => {
             choice={choice}
             selected={players[0].choice === choice}
             onClick={() => handleChoice(choice)}
-            disabled={gameState !== "choosing"}
+            disabled={gameState !== "choosing" || players[0].isEliminated}
           />
         ))}
       </div>
 
-      {result && (
-        <div className="mt-4 p-4 bg-white rounded-lg shadow-md">
-          <h3 className="text-xl font-semibold mb-3">対戦結果</h3>
-          {result.players.map(player => (
-            <div key={player.id} className="mb-2">
-              <span className="font-medium">{player.name}: </span>
-              <span className={player.id === result.winner?.id ? "text-game-pink font-bold" : ""}>
-                {getChoiceInJapanese(player.choice)}
-              </span>
-            </div>
+      {roundResults.length > 0 && (
+        <div className="w-full max-w-2xl space-y-4">
+          <h3 className="text-xl font-semibold mb-3">Round Results</h3>
+          {roundResults.map((result, index) => (
+            <Card key={index} className="bg-white">
+              <CardContent className="pt-6">
+                <h4 className="font-medium mb-2">Round {result.roundNumber}</h4>
+                {result.players.map(player => (
+                  <div key={player.id} className="mb-2">
+                    <span className="font-medium">{player.name}: </span>
+                    <span className={
+                      result.winners.some(w => w.id === player.id) 
+                        ? "text-game-pink font-bold" 
+                        : ""
+                    }>
+                      {getChoiceName(player.choice)}
+                    </span>
+                  </div>
+                ))}
+                <div className="mt-2 text-sm text-gray-600">
+                  {result.isTie 
+                    ? "Tie - All players advance" 
+                    : `Winner${result.winners.length > 1 ? 's' : ''}: ${result.winners.map(w => w.name).join(', ')}`
+                  }
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
 
       <div className="mt-8">
-        {gameState === "choosing" && (
+        {gameState === "choosing" && activePlayers.length > 1 && (
           <Button 
             onClick={handleSubmit}
             className="bg-game-purple hover:bg-game-pink text-white px-8 py-4 text-lg"
           >
-            決定
+            Submit
           </Button>
         )}
-        {gameState === "result" && (
-          <Button 
-            onClick={playAgain}
-            className="bg-game-blue hover:bg-game-purple text-white px-8 py-4 text-lg"
-          >
-            もう一度遊ぶ
-          </Button>
+        {gameState === "finished" && (
+          <div className="text-center">
+            <div className="mb-4 text-xl font-bold">
+              {roundResults[roundResults.length - 1].isTie 
+                ? `Game ended in a tie between ${roundResults[roundResults.length - 1].winners.map(w => w.name).join(', ')}!`
+                : `${roundResults[roundResults.length - 1].winners[0].name} wins the game!`
+              }
+            </div>
+            <Button 
+              onClick={playAgain}
+              className="bg-game-blue hover:bg-game-purple text-white px-8 py-4 text-lg"
+            >
+              Play Again
+            </Button>
+          </div>
         )}
       </div>
     </div>
