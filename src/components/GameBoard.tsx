@@ -34,6 +34,7 @@ const GameBoard = () => {
     const activePlayers = gamePlayers.filter(p => !p.isEliminated);
     const choices: Choice[] = ["rock", "paper", "scissors"];
     
+    // Generate AI choices for computer players if they haven't been set yet
     const playersWithChoices = activePlayers.map(player => 
       player.id === 1 
         ? player 
@@ -103,6 +104,21 @@ const GameBoard = () => {
     const roundResult = determineWinner(players, currentRound - 1);
     setRoundResults(prev => [...prev, roundResult]);
 
+    // Update players with AI choices
+    const updatedPlayers = players.map(player => {
+      if (player.id !== 1) {
+        const choices: Choice[] = ["rock", "paper", "scissors"];
+        return {
+          ...player,
+          choices: player.choices.map((c, i) => 
+            i === currentRound - 1 ? choices[Math.floor(Math.random() * choices.length)] : c
+          )
+        };
+      }
+      return player;
+    });
+    setPlayers(updatedPlayers);
+
     if (currentRound === TOTAL_ROUNDS || roundResult.winners.length === 1) {
       setGameState("finished");
     } else {
@@ -110,7 +126,7 @@ const GameBoard = () => {
       setPlayers(prev =>
         prev.map(player => ({
           ...player,
-          isEliminated: player.isEliminated || !winnerIds.includes(player.id)
+          isEliminated: !winnerIds.includes(player.id)
         }))
       );
       setCurrentRound(prev => prev + 1);
@@ -170,6 +186,14 @@ const GameBoard = () => {
             className="bg-game-purple hover:bg-game-pink text-white px-8 py-4 text-lg"
           >
             Start Game
+          </Button>
+        )}
+        {gameState === "playing" && (
+          <Button
+            onClick={playNextRound}
+            className="bg-game-blue hover:bg-game-purple text-white px-8 py-4 text-lg"
+          >
+            Next Round
           </Button>
         )}
         {gameState === "finished" && (
