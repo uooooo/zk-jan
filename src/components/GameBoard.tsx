@@ -6,58 +6,121 @@ import { toast } from "sonner";
 type Choice = "rock" | "paper" | "scissors";
 type GameState = "choosing" | "waiting" | "result";
 
+interface Player {
+  id: number;
+  name: string;
+  choice: Choice | null;
+}
+
+interface GameResult {
+  winner: Player | null;
+  players: Player[];
+  isTie: boolean;
+}
+
 const GameBoard = () => {
-  const [selectedChoice, setSelectedChoice] = useState<Choice | null>(null);
+  const [players, setPlayers] = useState<Player[]>([
+    { id: 1, name: "あなた", choice: null },
+    { id: 2, name: "プレイヤー2", choice: null },
+    { id: 3, name: "プレイヤー3", choice: null },
+  ]);
   const [gameState, setGameState] = useState<GameState>("choosing");
-  const [result, setResult] = useState<string>("");
+  const [result, setResult] = useState<GameResult | null>(null);
 
   const handleChoice = (choice: Choice) => {
-    setSelectedChoice(choice);
+    setPlayers(prev => 
+      prev.map(player => 
+        player.id === 1 ? { ...player, choice } : player
+      )
+    );
+  };
+
+  const determineWinner = (gamePlayers: Player[]): GameResult => {
+    // シミュレートされた対戦相手の選択を生成
+    const choices: Choice[] = ["rock", "paper", "scissors"];
+    const playersWithChoices = gamePlayers.map(player => 
+      player.id === 1 
+        ? player 
+        : { ...player, choice: choices[Math.floor(Math.random() * choices.length)] }
+    );
+
+    // 全員が同じ手を出した場合は引き分け
+    const allSameChoice = playersWithChoices.every(p => p.choice === playersWithChoices[0].choice);
+    if (allSameChoice) {
+      return { winner: null, players: playersWithChoices, isTie: true };
+    }
+
+    // 勝者を決定
+    const winningCombos = {
+      rock: "scissors",
+      paper: "rock",
+      scissors: "paper",
+    };
+
+    const playerScores = playersWithChoices.map(player => {
+      let score = 0;
+      playersWithChoices.forEach(opponent => {
+        if (player.id !== opponent.id && player.choice && opponent.choice) {
+          if (winningCombos[player.choice] === opponent.choice) {
+            score++;
+          }
+        }
+      });
+      return { player, score };
+    });
+
+    const maxScore = Math.max(...playerScores.map(ps => ps.score));
+    const winners = playerScores.filter(ps => ps.score === maxScore);
+
+    return {
+      winner: winners.length === 1 ? winners[0].player : null,
+      players: playersWithChoices,
+      isTie: winners.length > 1,
+    };
   };
 
   const handleSubmit = () => {
-    if (!selectedChoice) {
-      toast.error("Please select a choice first!");
+    if (!players[0].choice) {
+      toast.error("手を選んでください！");
       return;
     }
 
     setGameState("waiting");
-    // Simulate opponent's choice
     setTimeout(() => {
-      const choices: Choice[] = ["rock", "paper", "scissors"];
-      const opponentChoice = choices[Math.floor(Math.random() * choices.length)];
-      
-      let gameResult = "";
-      if (selectedChoice === opponentChoice) {
-        gameResult = "It's a tie!";
-      } else if (
-        (selectedChoice === "rock" && opponentChoice === "scissors") ||
-        (selectedChoice === "paper" && opponentChoice === "rock") ||
-        (selectedChoice === "scissors" && opponentChoice === "paper")
-      ) {
-        gameResult = "You win!";
-      } else {
-        gameResult = "You lose!";
-      }
-      
+      const gameResult = determineWinner(players);
       setResult(gameResult);
       setGameState("result");
-      toast(gameResult);
+      
+      if (gameResult.isTie) {
+        toast("引き分けです！");
+      } else if (gameResult.winner) {
+        toast(`${gameResult.winner.name}の勝ちです！`);
+      }
     }, 1500);
   };
 
   const playAgain = () => {
-    setSelectedChoice(null);
+    setPlayers(prev => prev.map(player => ({ ...player, choice: null })));
     setGameState("choosing");
-    setResult("");
+    setResult(null);
+  };
+
+  const getChoiceInJapanese = (choice: Choice | null): string => {
+    if (!choice) return "未選択";
+    const choices = {
+      rock: "グー",
+      paper: "パー",
+      scissors: "チョキ",
+    };
+    return choices[choice];
   };
 
   return (
     <div className="flex flex-col items-center gap-8 p-8">
       <h2 className="text-3xl font-bold text-game-purple mb-8">
-        {gameState === "choosing" && "Choose your move"}
-        {gameState === "waiting" && "Waiting for opponent..."}
-        {gameState === "result" && result}
+        {gameState === "choosing" && "手を選んでください"}
+        {gameState === "waiting" && "相手の手を待っています..."}
+        {gameState === "result" && (result?.isTie ? "引き分け！" : `${result?.winner?.name}の勝ち！`)}
       </h2>
       
       <div className="flex gap-6 flex-wrap justify-center">
@@ -65,12 +128,26 @@ const GameBoard = () => {
           <GameChoice
             key={choice}
             choice={choice}
-            selected={selectedChoice === choice}
+            selected={players[0].choice === choice}
             onClick={() => handleChoice(choice)}
             disabled={gameState !== "choosing"}
           />
         ))}
       </div>
+
+      {result && (
+        <div className="mt-4 p-4 bg-white rounded-lg shadow-md">
+          <h3 className="text-xl font-semibold mb-3">対戦結果</h3>
+          {result.players.map(player => (
+            <div key={player.id} className="mb-2">
+              <span className="font-medium">{player.name}: </span>
+              <span className={player.id === result.winner?.id ? "text-game-pink font-bold" : ""}>
+                {getChoiceInJapanese(player.choice)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mt-8">
         {gameState === "choosing" && (
@@ -78,7 +155,7 @@ const GameBoard = () => {
             onClick={handleSubmit}
             className="bg-game-purple hover:bg-game-pink text-white px-8 py-4 text-lg"
           >
-            Submit Choice
+            決定
           </Button>
         )}
         {gameState === "result" && (
@@ -86,7 +163,7 @@ const GameBoard = () => {
             onClick={playAgain}
             className="bg-game-blue hover:bg-game-purple text-white px-8 py-4 text-lg"
           >
-            Play Again
+            もう一度遊ぶ
           </Button>
         )}
       </div>
